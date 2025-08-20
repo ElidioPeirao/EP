@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Projetos</title>
+    <!-- Tailwind CSS para um design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilo para um carregamento suave da página e fundo com gradiente */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Fundo escuro base */
+            background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+            background-size: 2rem 2rem;
+            transition: background-color 0.3s;
+        }
+        /* Efeito de vidro para os painéis */
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.6); /* Fundo semi-transparente escuro */
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Adiciona um cursor de ponteiro na imagem do projeto para indicar que é clicável */
+        #project-image {
+            transition: opacity 0.2s;
+        }
+        #project-image:hover {
+            cursor: pointer;
+            opacity: 0.85;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <!-- Container Principal -->
+    <div class="w-full max-w-md p-4">
+
+        <!-- Container da Aplicação Principal -->
+        <div id="app-container" class="glass-panel p-8 rounded-2xl shadow-2xl text-center">
+            <h1 class="text-3xl font-bold text-white mb-6">Visualizador de Projetos</h1>
+            
+            <div class="flex space-x-2 mb-6">
+                <button id="buscar-projeto-btn" onclick="buscarProjeto()" class="w-full bg-orange-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-orange-700 transition-all duration-300 text-lg shadow-lg shadow-orange-600/20">
+                    <i class="fas fa-random mr-2"></i>Aleatório
+                </button>
+                <button id="listar-projetos-btn" onclick="listarProjetos()" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-600 transition-all duration-300 text-lg shadow-lg">
+                    <i class="fas fa-list mr-2"></i>Listar Todos
+                </button>
+            </div>
+
+            <!-- Área de exibição da imagem -->
+            <div id="image-display" class="mt-6 p-4 border-2 border-dashed border-gray-700 rounded-lg min-h-[200px] flex flex-col items-center justify-center bg-gray-900/50">
+                <p id="image-placeholder" class="text-gray-400">Carregando projeto...</p>
+                <img id="project-image" src="" alt="Imagem do Projeto" class="max-w-full max-h-96 rounded-lg" style="display: none;"/>
+                
+                <!-- Roleta de Animação -->
+                <div id="roulette-wrapper" class="w-full relative h-28 overflow-hidden mt-4" style="display: none;">
+                    <!-- Marcador de destaque central -->
+                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-full bg-orange-500 z-20 rounded shadow-lg shadow-orange-500/50"></div>
+                    <div id="roulette-strip" class="absolute top-0 left-0 h-full flex items-center" style="transition: transform 4000ms cubic-bezier(0.25, 1, 0.5, 1);">
+                        <!-- Imagens da roleta serão inseridas aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Tela Cheia -->
+    <div id="fullscreen-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 backdrop-blur-sm" style="display: none;">
+        <span id="close-modal" class="absolute top-4 right-6 text-white text-5xl font-bold cursor-pointer hover:text-gray-300 transition-colors">&times;</span>
+        <img id="fullscreen-image" src="" alt="Imagem do Projeto em Tela Cheia" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl">
+    </div>
+
+    <!-- Modal da Lista de Arquivos -->
+    <div id="list-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 backdrop-blur-sm p-4" style="display: none;">
+        <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-3xl p-6 relative">
+            <span id="close-list-modal" class="absolute top-4 right-5 text-white text-3xl font-bold cursor-pointer hover:text-gray-300">&times;</span>
+            <h2 class="text-2xl font-bold text-white mb-4">Lista de Projetos</h2>
+            <div id="file-list-container" class="max-h-[70vh] overflow-y-auto pr-2">
+                <div id="file-list" class="space-y-2 text-left">
+                    <!-- A lista de arquivos será inserida aqui pelo JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- LÓGICA DA APLICAÇÃO ---
+
+        // =================================================================================
+        //      CONFIGURAÇÃO DA API DO GOOGLE DRIVE
+        // =================================================================================
+        const GOOGLE_API_KEY = 'AIzaSyB_N0r6Sd8pDG79ZmxpOmmp7wh7191_iU8'; 
+        const GOOGLE_DRIVE_FOLDER_ID = '1vyBB-lxRoTGYbuiWQSCBH-SQCCNKpAmG';
+        // =================================================================================
+
+        const projectImage = document.getElementById('project-image');
+        const imagePlaceholder = document.getElementById('image-placeholder');
+        const buscarBtn = document.getElementById('buscar-projeto-btn');
+        const listarBtn = document.getElementById('listar-projetos-btn');
+        
+        const fullscreenModal = document.getElementById('fullscreen-modal');
+        const fullscreenImage = document.getElementById('fullscreen-image');
+        const closeModal = document.getElementById('close-modal');
+
+        const listModal = document.getElementById('list-modal');
+        const closeListModal = document.getElementById('close-list-modal');
+        const fileList = document.getElementById('file-list');
+
+        const rouletteWrapper = document.getElementById('roulette-wrapper');
+        const rouletteStrip = document.getElementById('roulette-strip');
+
+        let filesCache = []; // Cache para armazenar os arquivos (ID, nome, thumbnailLink)
+
+        // Função reutilizável para buscar os arquivos da API com paginação
+        const fetchFiles = async () => {
+            if (filesCache.length > 0) return filesCache; // Retorna o cache se já existir
+
+            let allFiles = [];
+            let pageToken = null;
+            // Aumenta o pageSize para o máximo (1000) para reduzir o número de chamadas
+            const baseUrl = `https://www.googleapis.com/drive/v3/files?q='${GOOGLE_DRIVE_FOLDER_ID}'+in+parents&key=${GOOGLE_API_KEY}&fields=files(id,name,thumbnailLink)&pageSize=1000`;
+
+            do {
+                const url = pageToken ? `${baseUrl}&pageToken=${pageToken}` : baseUrl;
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Erro da API do Google:', errorData);
+                    throw new Error(`Erro na API do Google Drive: ${errorData.error.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+                if (data.files) {
+                    allFiles = allFiles.concat(data.files);
+                }
+                pageToken = data.nextPageToken; // Pega o token para a próxima página
+
+            } while (pageToken); // Continua o loop enquanto houver uma próxima página
+
+            if (allFiles.length === 0) {
+                throw new Error("Nenhuma imagem encontrada na pasta. Verifique o ID e as permissões de compartilhamento.");
+            }
+            
+            filesCache = allFiles.map(file => ({ id: file.id, name: file.name, thumbnailLink: file.thumbnailLink }));
+            return filesCache;
+        };
+
+        // Função para mostrar uma imagem específica pelo ID
+        const mostrarProjetoPorId = (id) => {
+            imagePlaceholder.style.display = 'block';
+            imagePlaceholder.textContent = 'Carregando imagem...';
+            projectImage.style.display = 'none';
+
+            const imageUrl = `https://lh3.googleusercontent.com/d/${id}`;
+            projectImage.src = imageUrl;
+            
+            projectImage.onload = () => {
+                imagePlaceholder.style.display = 'none';
+                projectImage.style.display = 'block';
+            };
+
+            projectImage.onerror = () => {
+                imagePlaceholder.textContent = "Não foi possível carregar a imagem. O ID pode ser inválido.";
+            };
+        };
+
+        // Função para buscar um projeto aleatório com animação de roleta
+        window.buscarProjeto = async () => {
+            buscarBtn.disabled = true;
+            listarBtn.disabled = true;
+            buscarBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sorteando...';
+            projectImage.style.display = 'none';
+            imagePlaceholder.style.display = 'none';
+            rouletteWrapper.style.display = 'block';
+            rouletteStrip.innerHTML = '';
+            rouletteStrip.style.transform = 'translateX(0px)'; // Reseta a posição
+
+            try {
+                const files = await fetchFiles();
+                if (files.length === 0) throw new Error("Nenhum arquivo na pasta para sortear.");
+
+                const spinCycles = 5;
+                const extendedFiles = Array(spinCycles).fill(files).flat();
+                
+                extendedFiles.forEach(file => {
+                    const img = document.createElement('img');
+                    img.src = file.thumbnailLink;
+                    img.className = "h-24 w-24 object-cover rounded-md mx-2 border-2 border-transparent flex-shrink-0";
+                    rouletteStrip.appendChild(img);
+                });
+
+                const targetIndexInOriginal = Math.floor(Math.random() * files.length);
+                const targetIndexInStrip = (spinCycles - 2) * files.length + targetIndexInOriginal;
+                const targetFile = files[targetIndexInOriginal];
+                
+                await new Promise(resolve => setTimeout(resolve, 100)); 
+
+                const targetElement = rouletteStrip.children[targetIndexInStrip];
+                const wrapperWidth = rouletteWrapper.offsetWidth;
+                const targetElementCenter = targetElement.offsetLeft + targetElement.offsetWidth / 2;
+                const randomOffset = (Math.random() - 0.5) * targetElement.offsetWidth * 0.8;
+                const finalPosition = (wrapperWidth / 2) - targetElementCenter - randomOffset;
+
+                rouletteStrip.style.transform = `translateX(${finalPosition}px)`;
+
+                setTimeout(() => {
+                    Array.from(rouletteStrip.children).forEach(child => child.style.opacity = '0.4');
+                    targetElement.style.opacity = '1';
+                    targetElement.classList.remove('border-transparent');
+                    targetElement.classList.add('border-orange-500');
+
+                    setTimeout(() => {
+                        mostrarProjetoPorId(targetFile.id);
+                        rouletteWrapper.style.display = 'none';
+                        buscarBtn.innerHTML = '<i class="fas fa-random mr-2"></i>Aleatório';
+                        buscarBtn.disabled = false;
+                        listarBtn.disabled = false;
+                    }, 1000);
+                }, 4000); // Deve corresponder à duração da transição CSS
+
+            } catch (error) {
+                console.error("Erro ao buscar projeto:", error);
+                imagePlaceholder.textContent = error.message;
+                imagePlaceholder.style.display = 'block';
+                rouletteWrapper.style.display = 'none';
+                buscarBtn.innerHTML = '<i class="fas fa-random mr-2"></i>Aleatório';
+                buscarBtn.disabled = false;
+                listarBtn.disabled = false;
+            }
+        };
+
+        // Função para listar todos os projetos
+        window.listarProjetos = async () => {
+            fileList.innerHTML = '<p class="text-gray-400 flex items-center justify-center col-span-full"><i class="fas fa-spinner fa-spin mr-2"></i>Buscando arquivos...</p>';
+            listModal.style.display = 'flex';
+            
+            try {
+                const files = await fetchFiles();
+                fileList.innerHTML = ''; // Limpa a lista
+                fileList.className = 'grid grid-cols-2 sm:grid-cols-4 gap-4';
+                
+                files.forEach(file => {
+                    const cardItem = document.createElement('div');
+                    cardItem.innerHTML = `
+                        <a href="#" class="block p-2 rounded-lg hover:bg-gray-700/50 transition-colors h-full flex flex-col text-center">
+                            <img src="${file.thumbnailLink}" alt="Miniatura de ${file.name}" class="w-full h-24 object-cover rounded-md mb-2 border border-gray-600">
+                            <span class="text-orange-400 text-sm break-words mt-auto">${file.name}</span>
+                        </a>
+                    `;
+                    cardItem.onclick = (e) => {
+                        e.preventDefault();
+                        mostrarProjetoPorId(file.id);
+                        listModal.style.display = 'none';
+                    };
+                    fileList.appendChild(cardItem);
+                });
+
+            } catch (error) {
+                fileList.className = ''; // Reseta as classes em caso de erro
+                fileList.innerHTML = `<p class="text-red-400 col-span-full text-center">${error.message}</p>`;
+            }
+        };
+        
+        // --- LÓGICA DOS MODAIS ---
+        projectImage.addEventListener('click', () => {
+            if(projectImage.src && projectImage.style.display !== 'none') {
+                fullscreenImage.src = projectImage.src;
+                fullscreenModal.style.display = 'flex';
+            }
+        });
+
+        closeModal.addEventListener('click', () => {
+            fullscreenModal.style.display = 'none';
+            fullscreenImage.src = '';
+        });
+
+        fullscreenModal.addEventListener('click', (event) => {
+            if (event.target === fullscreenModal) {
+                fullscreenModal.style.display = 'none';
+                fullscreenImage.src = '';
+            }
+        });
+
+        closeListModal.addEventListener('click', () => {
+            listModal.style.display = 'none';
+        });
+
+        listModal.addEventListener('click', (event) => {
+            if (event.target === listModal) {
+                listModal.style.display = 'none';
+            }
+        });
+
+        // Carrega a primeira imagem assim que a página é aberta (sem a roleta)
+        document.addEventListener('DOMContentLoaded', async () => {
+             try {
+                const files = await fetchFiles();
+                const randomIndex = Math.floor(Math.random() * files.length);
+                const randomFile = files[randomIndex];
+                mostrarProjetoPorId(randomFile.id);
+            } catch (error) {
+                imagePlaceholder.textContent = error.message;
+            }
+        });
+    </script>
+</body>
+</html>
